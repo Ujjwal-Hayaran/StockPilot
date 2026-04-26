@@ -33,6 +33,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 
 type Product = Tables<"products">;
 type StockMovement = Tables<"stock_movements"> & { products?: Pick<Product, "name"> | null };
@@ -193,6 +194,17 @@ const Index = ({ userEmail, userId }: IndexProps) => {
 
   const firstUrgent = filteredUrgent[0];
 
+  const barDescriptions: Record<string, string> = {
+    S: "Safe Items - Products with healthy stock levels",
+    L: "Low Stock - Items that need attention soon",
+    C: "Critical Stock - Urgent items running low",
+    In: "Stock-ins - Number of incoming shipments",
+    Out: "Stock-outs - Number of outgoing shipments",
+    A: "Active Alerts - Urgent items requiring reorder",
+    R: "Reorder Suggestions - Top priority items to reorder",
+    T: "Total Products - Complete inventory count",
+  };
+
   const activityBars = useMemo(() => {
     const safeCount = insights.filter((item) => item.status === "Safe" || item.status === "No history").length;
     const lowCount = insights.filter((item) => item.status === "Low").length;
@@ -201,11 +213,15 @@ const Index = ({ userEmail, userId }: IndexProps) => {
     const stockOuts = filteredMovements.filter((movement) => movement.movement_type === "stock_out").length;
     const values = [safeCount, lowCount, criticalCount, stockIns, stockOuts, filteredUrgent.length, topReorder.length, Math.max(1, products.length)];
     const maximum = Math.max(...values, 1);
-    return values.map((value, index) => ({
-      value,
-      label: ["S", "L", "C", "In", "Out", "A", "R", "T"][index],
-      height: Math.max(24, Math.round((value / maximum) * 100)),
-    }));
+    return values.map((value, index) => {
+      const label = ["S", "L", "C", "In", "Out", "A", "R", "T"][index];
+      return {
+        value,
+        label,
+        description: barDescriptions[label],
+        height: Math.max(24, Math.round((value / maximum) * 100)),
+      };
+    });
   }, [filteredMovements, filteredUrgent.length, insights, products.length, topReorder.length]);
 
   const summary = useMemo(
@@ -306,7 +322,8 @@ const Index = ({ userEmail, userId }: IndexProps) => {
   const handleAddProductShortcut = () => setActiveTab("products");
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-background text-foreground">
+    <TooltipProvider>
+      <main className="relative min-h-screen overflow-hidden bg-background text-foreground">
       <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,_hsl(var(--primary)/0.14),_transparent_34%),radial-gradient(circle_at_top_right,_hsl(var(--accent)/0.14),_transparent_28%),linear-gradient(to_bottom,_hsl(var(--background)),_hsl(var(--background)/0.92))]" />
       <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-64 bg-[linear-gradient(180deg,_hsl(var(--panel)/0.9),_transparent)]" />
 
@@ -439,15 +456,23 @@ const Index = ({ userEmail, userId }: IndexProps) => {
                   <CardContent className="space-y-5">
                     <div className="grid h-44 grid-cols-8 items-end gap-3">
                       {activityBars.map((bar) => (
-                        <div key={bar.label} className="flex h-full flex-col items-center gap-2">
-                          <div className="flex h-full w-full items-end rounded-full bg-muted/50 p-1">
-                            <div
-                              className="w-full rounded-full bg-[linear-gradient(180deg,_hsl(var(--primary))_0%,_hsl(150_54%_32%)_100%)] shadow-[0_10px_30px_hsl(var(--primary)/0.2)]"
-                              style={{ height: `${bar.height}%` }}
-                            />
-                          </div>
-                          <span className="text-[11px] font-medium text-muted-foreground">{bar.label}</span>
-                        </div>
+                        <Tooltip key={bar.label}>
+                          <TooltipTrigger asChild>
+                            <div className="flex h-full flex-col items-center gap-2 cursor-help">
+                              <div className="flex h-full w-full items-end rounded-full bg-muted/50 p-1">
+                                <div
+                                  className="w-full rounded-full bg-[linear-gradient(180deg,_hsl(var(--primary))_0%,_hsl(150_54%_32%)_100%)] shadow-[0_10px_30px_hsl(var(--primary)/0.2)]"
+                                  style={{ height: `${bar.height}%` }}
+                                />
+                              </div>
+                              <span className="text-[11px] font-medium text-muted-foreground">{bar.label}</span>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="bg-slate-900 text-white border-slate-700">
+                            <p className="font-semibold">{bar.description}</p>
+                            <p className="text-xs text-slate-300 mt-1">Count: {bar.value}</p>
+                          </TooltipContent>
+                        </Tooltip>
                       ))}
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -686,6 +711,7 @@ const Index = ({ userEmail, userId }: IndexProps) => {
       </Tabs>
       <InventoryChatbot products={products} movements={movements} />
     </main>
+    </TooltipProvider>
   );
 };
 
