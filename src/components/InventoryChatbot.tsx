@@ -121,7 +121,7 @@ export const InventoryChatbot = ({ products, movements }: InventoryChatbotProps)
                   ) : (
                     <User className="mt-0.5 h-4 w-4 shrink-0 text-foreground" />
                   )}
-                  <p className="leading-relaxed">{message.content}</p>
+                  <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
                 </div>
               ))}
               {loading && (

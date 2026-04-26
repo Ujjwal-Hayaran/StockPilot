@@ -1,4 +1,11 @@
+// @ts-ignore Deno resolves URL imports at runtime in Supabase Edge Functions.
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+
+declare const Deno: {
+  env: {
+    get(key: string): string | undefined;
+  };
+};
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,7 +22,7 @@ type RequestPayload = {
   context?: unknown;
 };
 
-serve(async (req) => {
+serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -37,10 +44,15 @@ serve(async (req) => {
 
     const systemPrompt = [
       "You are an inventory assistant for a small retailer.",
-      "Answer with practical and concise guidance.",
-      "When suggesting reorder quantities, explain briefly why.",
-      "If data is missing, clearly say what is missing.",
-      "Keep your response under 180 words unless user asks for detail.",
+      "Answer with practical, concise guidance in a clean structure.",
+      "Use this default response format unless the user asks otherwise:",
+      "1) Quick answer: one short sentence.",
+      "2) Key points: 2-5 bullet points with concrete actions or findings.",
+      "3) If recommending reorder quantities, include a brief reason for each item.",
+      "4) If data is missing, add a 'Missing data' bullet that names the missing fields.",
+      "5) End with one short 'Next step' line.",
+      "Do not use markdown tables.",
+      "Keep responses scannable and under 180 words unless the user asks for detail.",
     ].join(" ");
 
     const contextText = `Inventory context JSON: ${JSON.stringify(payload.context ?? {}, null, 2)}`;
