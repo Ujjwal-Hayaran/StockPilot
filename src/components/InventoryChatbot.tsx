@@ -1,5 +1,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import { Bot, Loader2, MessageCircle, Send, User, X } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -121,7 +123,13 @@ export const InventoryChatbot = ({ products, movements }: InventoryChatbotProps)
                   ) : (
                     <User className="mt-0.5 h-4 w-4 shrink-0 text-foreground" />
                   )}
-                  <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+                  {message.role === "assistant" ? (
+                    <div className="prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                    </div>
+                  ) : (
+                    <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+                  )}
                 </div>
               ))}
               {loading && (
