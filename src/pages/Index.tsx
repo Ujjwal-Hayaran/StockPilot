@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowDownCircle,
@@ -117,8 +117,10 @@ const Index = ({ userEmail, userId }: IndexProps) => {
   const [productForm, setProductForm] = useState(emptyProductForm);
   const [movementForm, setMovementForm] = useState(emptyMovementForm);
   const [loading, setLoading] = useState(true);
+  const [importing, setImporting] = useState(false);
   const [savingProduct, setSavingProduct] = useState(false);
   const [savingMovement, setSavingMovement] = useState(false);
+  const csvInputRef = useRef<HTMLInputElement>(null);
 
   const loadData = async () => {
     if (!userId) {
@@ -146,6 +148,95 @@ const Index = ({ userEmail, userId }: IndexProps) => {
       setMovements((movementsResult.data ?? []) as StockMovement[]);
     }
     setLoading(false);
+  };
+
+  const openCsvPicker = () => {
+    csvInputRef.current?.click();
+  };
+
+  const handleCsvImport = async (event: ChangeEvent<HTMLInputElement>) => {
+    if (!userId) {
+      toast.error("No authenticated user found.");
+      event.target.value = "";
+      return;
+    }
+
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      toast.error("Please select a CSV file.");
+      event.target.value = "";
+      return;
+    }
+
+    setImporting(true);
+    try {
+      const csvText = await file.text();
+      const rows = csvText
+        .split(/\r?\n/)
+        .map((row) => row.trim())
+        .filter((row) => row.length > 0);
+
+      if (rows.length < 2) {
+        toast.error("CSV is empty or has no data rows.");
+        return;
+      }
+
+      const headers = rows[0].split(",").map((header) => header.trim().toLowerCase());
+      const nameIdx = headers.indexOf("name");
+      const categoryIdx = headers.indexOf("category");
+      const priceIdx = headers.indexOf("price");
+      const stockIdx = headers.indexOf("current_stock");
+      const phoneIdx = headers.indexOf("supplier_phone");
+
+      if (nameIdx < 0 || categoryIdx < 0 || priceIdx < 0 || stockIdx < 0) {
+        toast.error("CSV must include: name, category, price, current_stock.");
+        return;
+      }
+
+      const productsToInsert: TablesInsert<"products">[] = [];
+      for (const row of rows.slice(1)) {
+        const columns = row.split(",").map((column) => column.trim());
+        const name = columns[nameIdx] ?? "";
+        const category = columns[categoryIdx] ?? "";
+        const price = Number(columns[priceIdx] ?? "");
+        const currentStock = Number(columns[stockIdx] ?? "");
+        const supplierPhone = phoneIdx >= 0 ? (columns[phoneIdx] || null) : null;
+
+        if (!name || !category || !Number.isFinite(price) || !Number.isFinite(currentStock)) {
+          continue;
+        }
+
+        productsToInsert.push({
+          name,
+          category,
+          price,
+          current_stock: currentStock,
+          supplier_phone: supplierPhone,
+          user_id: userId,
+        });
+      }
+
+      if (productsToInsert.length === 0) {
+        toast.error("No valid product rows found in CSV.");
+        return;
+      }
+
+      const { error } = await supabase.from("products").insert(productsToInsert);
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+
+      toast.success(`Imported ${productsToInsert.length} products.`);
+      await loadData();
+    } catch {
+      toast.error("Unable to import CSV file.");
+    } finally {
+      setImporting(false);
+      event.target.value = "";
+    }
   };
 
   useEffect(() => {
@@ -403,10 +494,11 @@ const Index = ({ userEmail, userId }: IndexProps) => {
                     <Button onClick={handleAddProductShortcut} className="rounded-full bg-primary px-5 text-primary-foreground hover:bg-primary/90">
                       <Plus className="mr-2 h-4 w-4" />Add product
                     </Button>
-                    <Button variant="outline" onClick={loadData} disabled={loading} className="rounded-full border-border/70 bg-background/80 px-5">
-                      {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                    <Button variant="outline" onClick={openCsvPicker} disabled={loading || importing} className="rounded-full border-border/70 bg-background/80 px-5">
+                      {loading || importing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
                       Import data
                     </Button>
+                    <input ref={csvInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleCsvImport} />
                     <Button variant="ghost" size="icon" className="h-11 w-11 rounded-full border border-border/70 bg-background/70">
                       <Mail className="h-4 w-4" />
                     </Button>
