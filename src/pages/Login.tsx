@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Building2, Loader2, Lock, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -9,11 +9,38 @@ import { supabase } from "@/integrations/supabase/client";
 
 type AuthMode = "signin" | "signup";
 
+const getEmailRedirectUrl = () => {
+  const configuredRedirect = import.meta.env.VITE_AUTH_REDIRECT_URL;
+  if (configuredRedirect) return configuredRedirect;
+  return `${window.location.origin}/login`;
+};
+
 const Login = () => {
   const [mode, setMode] = useState<AuthMode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [authCallbackMessage, setAuthCallbackMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+
+    const errorDescription = searchParams.get("error_description") ?? hashParams.get("error_description");
+    if (errorDescription) {
+      setAuthCallbackMessage(decodeURIComponent(errorDescription));
+      return;
+    }
+
+    const hasAuthCode = searchParams.has("code") || searchParams.has("token_hash");
+    const hasSessionTokens = hashParams.has("access_token") || hashParams.has("refresh_token");
+    const callbackType = searchParams.get("type") ?? hashParams.get("type");
+    const isVerificationFlow = callbackType === "signup" || callbackType === "magiclink";
+
+    if (hasAuthCode || hasSessionTokens || isVerificationFlow) {
+      setAuthCallbackMessage("Email verified. Finishing sign-in and redirecting...");
+    }
+  }, []);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -34,6 +61,9 @@ const Login = () => {
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
+      options: {
+        emailRedirectTo: getEmailRedirectUrl(),
+      },
     });
 
     if (error) {
@@ -86,6 +116,12 @@ const Login = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {authCallbackMessage ? (
+              <div className="mb-4 rounded-2xl border border-primary/20 bg-primary/5 px-3 py-2 text-sm text-primary">
+                {authCallbackMessage}
+              </div>
+            ) : null}
+
             <form className="space-y-4" onSubmit={handleSubmit}>
               <Field label="Email">
                 <div className="relative">
